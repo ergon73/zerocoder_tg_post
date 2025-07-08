@@ -192,3 +192,37 @@ ZeroCoder Team
 ---
 
 **Примечание:** Не забудьте добавить `config.txt` в `.gitignore`, чтобы API ключи не попали в репозиторий! 
+
+# Content Generation Service
+
+## Переменные окружения
+
+Для локальной разработки создайте файл `.env` в корне проекта со следующими переменными:
+
+```env
+# OpenAI API ключ для генерации контента
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Currents API ключ для получения новостей
+CURRENTS_API_KEY=your_currents_api_key_here
+
+# Telegram бот токен (получить у @BotFather)
+TELEGRAM_TOKEN=your_telegram_bot_token_here
+```
+
+⚠️ Файл `.env` добавлен в `.gitignore` и не будет отправлен в репозиторий.
+
+## Настройка Telegram бота
+
+1. Получите токен бота у [@BotFather](https://t.me/BotFather)
+2. Добавьте токен в `.env` файл для локальной разработки
+3. При деплое на сервер, добавьте переменную `TELEGRAM_TOKEN` в переменные окружения платформы
+4. Настройте вебхук для бота, заменив `YOUR_TOKEN` и `YOUR_DOMAIN`:
+```
+https://api.telegram.org/botYOUR_TOKEN/setWebhook?url=https://YOUR_DOMAIN/telegram/webhook
+```
+
+### Команды бота
+
+- `/start` - Получить приветственное сообщение и инструкции
+- `/generate [тема]` - Сгенерировать контент по указанной теме 
