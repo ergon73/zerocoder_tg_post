@@ -9,33 +9,30 @@ import logging
 from pathlib import Path
 
 # 🇷🇺 Загружаем переменные окружения из .env / 🇺🇸 Load environment variables
-print("Текущий рабочий каталог:", Path.cwd())
-print("Файл .env существует:", Path('.env').exists())
-if Path('.env').exists():
-    with open('.env', encoding='utf-8') as f:
-        print("Содержимое .env:\n", f.read())
-
 load_dotenv(dotenv_path=Path.cwd() / ".env")
-
-print("[DEBUG] OPENAI_API_KEY:", os.getenv("OPENAI_API_KEY"))
-print("[DEBUG] CURRENTS_API_KEY:", os.getenv("CURRENTS_API_KEY"))
 
 # 🇷🇺 Создаем FastAPI приложение / 🇺🇸 Create FastAPI app
 app = FastAPI()
 
 # 🇷🇺 Получаем API ключи из переменных окружения / 🇺🇸 Load API keys from environment
+openai_api_key = os.getenv("OPENAI_API_KEY")
 currents_api_key = os.getenv("CURRENTS_API_KEY")
 
 # ✅ Расширенный логинг
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("tgpost-debug")
 
-logger.debug(f"[DEBUG] CURRENTS_API_KEY: {currents_api_key}")
-
 # 🇷🇺 Проверка наличия ключей / 🇺🇸 Check for missing API keys
+if not openai_api_key:
+    logger.error("❌ Не задан OPENAI_API_KEY (в .env файле)")
+    raise ValueError("❌ Не задан OPENAI_API_KEY (в .env файле)")
+    
 if not currents_api_key:
     logger.error("❌ Не задан CURRENTS_API_KEY (в .env файле)")
     raise ValueError("❌ Не задан CURRENTS_API_KEY (в .env файле)")
+
+# Инициализация OpenAI клиента
+client = OpenAI(api_key=openai_api_key)
 
 # 🇷🇺 Модель входящих данных / 🇺🇸 Input data model
 class Topic(BaseModel):
@@ -70,7 +67,6 @@ def generate_content(topic: str) -> dict:
     news_context = get_recent_news(topic)
     try:
         # Заголовок
-        client = OpenAI()
         response_title = client.chat.completions.create(
             model="gpt-4o",
             messages=[{

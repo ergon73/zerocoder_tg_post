@@ -42,8 +42,13 @@ pip install -r requirements.txt
 
 4. **Настройте API ключи:**
 
-Создайте файл `config.txt` в корне проекта:
-```txt
+Скопируйте шаблон переменных окружения:
+```bash
+cp .env.example .env
+```
+
+Отредактируйте файл `.env` и добавьте ваши API ключи:
+```bash
 OPENAI_API_KEY=your_openai_api_key_here
 CURRENTS_API_KEY=your_currents_api_key_here
 ```

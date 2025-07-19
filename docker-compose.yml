@@ -5,9 +5,6 @@ services:
     build: .
     ports:
       - "8000:8000"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - CURRENTS_API_KEY=${CURRENTS_API_KEY}
-    volumes:
-      - ./config.txt:/app/config.txt:ro
+    env_file:
+      - .env
     restart: unless-stopped 
