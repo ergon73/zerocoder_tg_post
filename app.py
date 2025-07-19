@@ -7,6 +7,8 @@ import requests
 from dotenv import load_dotenv  # Для загрузки переменных окружения из .env файла
 import logging
 from pathlib import Path
+from fastapi import Request
+import httpx
 
 # 🇷🇺 Загружаем переменные окружения из .env / 🇺🇸 Load environment variables
 load_dotenv(dotenv_path=Path.cwd() / ".env")
@@ -79,7 +81,10 @@ def generate_content(topic: str) -> dict:
         if not response_title.choices or not hasattr(response_title.choices[0], "message"):
             logger.error(f"OpenAI не вернул заголовок: {response_title}")
             raise HTTPException(status_code=500, detail="OpenAI не вернул заголовок")
-        title = response_title.choices[0].message.content.strip()
+        title = response_title.choices[0].message.content
+        if title is None:
+            raise HTTPException(status_code=500, detail="OpenAI вернул пустой заголовок")
+        title = title.strip()
 
         # Мета-описание
         response_meta = client.chat.completions.create(
@@ -94,7 +99,10 @@ def generate_content(topic: str) -> dict:
         if not response_meta.choices or not hasattr(response_meta.choices[0], "message"):
             logger.error(f"OpenAI не вернул мета-описание: {response_meta}")
             raise HTTPException(status_code=500, detail="OpenAI не вернул мета-описание")
-        meta = response_meta.choices[0].message.content.strip()
+        meta = response_meta.choices[0].message.content
+        if meta is None:
+            raise HTTPException(status_code=500, detail="OpenAI вернул пустое мета-описание")
+        meta = meta.strip()
 
         # Полный пост
         response_post = client.chat.completions.create(
@@ -112,7 +120,10 @@ def generate_content(topic: str) -> dict:
         if not response_post.choices or not hasattr(response_post.choices[0], "message"):
             logger.error(f"OpenAI не вернул текст поста: {response_post}")
             raise HTTPException(status_code=500, detail="OpenAI не вернул текст поста")
-        post = response_post.choices[0].message.content.strip()
+        post = response_post.choices[0].message.content
+        if post is None:
+            raise HTTPException(status_code=500, detail="OpenAI вернул пустой текст поста")
+        post = post.strip()
 
         return {
             "title": title,
@@ -133,6 +144,86 @@ async def generate_post_api(payload: Topic):
 @app.get("/")
 def root():
     return {"message": "Service is running"}
+
+# 🇷🇺 Telegram бот / 🇺🇸 Telegram bot functionality
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+if not TELEGRAM_TOKEN:
+    logger.error("❌ Не задан TELEGRAM_TOKEN (в .env файле)")
+    raise ValueError("❌ Не задан TELEGRAM_TOKEN (в .env файле)")
+
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+
+async def send_telegram_message(chat_id: int, text: str):
+    """Отправка сообщения в Telegram"""
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                TELEGRAM_API_URL,
+                json={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "HTML"
+                }
+            )
+            response.raise_for_status()
+            logger.debug(f"Telegram API response: {response.text}")
+        except Exception as e:
+            logger.error(f"Ошибка отправки сообщения в Telegram: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Ошибка отправки сообщения в Telegram: {str(e)}")
+
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    """Обработка вебхука от Telegram"""
+    try:
+        update = await request.json()
+        logger.debug(f"Получен webhook от Telegram: {update}")
+        
+        if "message" in update:
+            message = update["message"]
+            chat_id = message["chat"]["id"]
+            text = message.get("text", "")
+            
+            if text.startswith("/generate"):
+                # Извлекаем тему из команды
+                topic = text.replace("/generate", "").strip()
+                if topic:
+                    # Отправляем сообщение о начале генерации
+                    await send_telegram_message(chat_id, f"🔄 Начинаю генерацию контента по теме: <b>{topic}</b>")
+                    
+                    # Генерируем контент
+                    try:
+                        result = generate_content(topic)
+                        
+                        # Форматируем ответ
+                        response_text = (
+                            f"✅ Готово!\n\n"
+                            f"<b>Заголовок:</b>\n{result['title']}\n\n"
+                            f"<b>Мета-описание:</b>\n{result['meta_description']}\n\n"
+                            f"<b>Текст статьи:</b>\n{result['post_content']}"
+                        )
+                        
+                        # Отправляем результат
+                        await send_telegram_message(chat_id, response_text)
+                    except Exception as e:
+                        error_message = f"❌ Ошибка при генерации контента: {str(e)}"
+                        await send_telegram_message(chat_id, error_message)
+                else:
+                    await send_telegram_message(
+                        chat_id,
+                        "❌ Пожалуйста, укажите тему после команды /generate\nПример: /generate искусственный интеллект"
+                    )
+            elif text == "/start":
+                await send_telegram_message(
+                    chat_id,
+                    "👋 Привет! Я бот для генерации контента.\n\n"
+                    "Используйте команду /generate с темой для генерации контента.\n"
+                    "Например: /generate искусственный интеллект"
+                )
+        
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обработки webhook: {str(e)}")
 
 # 🇷🇺 Эндпоинт heartbeat / 🇺🇸 Heartbeat check
 @app.get("/heartbeat")
